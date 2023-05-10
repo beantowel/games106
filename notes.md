@@ -12,9 +12,13 @@ git diff --no-index examples/gltfloading/gltfloading.cpp homework/homework1/home
 git diff --no-index examples/gltfskinning/gltfskinning.cpp homework/homework1/homework1.cpp
 ```
 
-## homework1
-refs: pbrbasic, gltfskinning, gltfloading, pbribl
+## homework
 ```powershell
+# glsl compile
 cd D:\Projects\games106\data\homework\shaders\glsl\homework1
 glslc -c mesh.vert;glslc -c mesh.frag;
+
+# compress
+7z a -t7z homework1.7z homework/homework1/homework1.cpp data/homework/shaders/glsl/homework1/*
+
 ```
