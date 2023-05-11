@@ -119,9 +119,9 @@ vec3 PBR(vec3 L, vec3 V, vec3 N, vec4 albedo, float metallic, float roughness)
 
 void main()
 {
-	vec4 albedo = texture(baseColorMap, inUV);
+	vec4 albedo = texture(baseColorMap, inUV) * materialData.baseColorFactor;
 	vec3 normal = texture(normalMap, inUV).xyz;
-	vec3 emissive = materialData.emissiveFactor.xyz * texture(emissiveMap, inUV).xyz;
+	vec3 emissive = texture(emissiveMap, inUV).xyz * materialData.emissiveFactor.xyz;
 	vec4 metalRough = texture(metallicRoughnessMap, inUV);
 	float metallic = metalRough.x;
 	float roughness = metalRough.y;
@@ -136,8 +136,8 @@ void main()
 	vec3 V = normalize(inViewVec);
 
 	vec3 c = PBR(L, V, N, albedo, metallic, roughness) + emissive;
-	outFragColor = vec4(c, 1.0);
-	// outFragColor = vec4(albedo.xyz, 1.0);
+	outFragColor = vec4(c, albedo.w);
+	// outFragColor = vec4(albedo.www, 1.0);
 	// outFragColor = vec4(emissive + 0.5, 1.0);
 	// outFragColor = vec4(metalRough.xyz, 1.0);
 	// outFragColor = vec4(normal, 1.0);

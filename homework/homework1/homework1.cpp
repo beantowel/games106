@@ -23,6 +23,8 @@
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
 #define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
 #endif
+
+#include <algorithm>
 #include "tiny_gltf.h"
 #include "vulkanexamplebase.h"
 #include "VulkanglTFModel.h"
@@ -480,30 +482,66 @@ public:
 		glTF rendering functions
 	*/
 
-	// Draw a single node including child nodes (if present)
-	void drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node* node)
+	void drawNodes(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 	{
-		if (node->mesh.primitives.size() > 0) {
-			uint32_t j = node->index;
-			// One dynamic offset per dynamic descriptor to offset into the ubo containing all model matrices
-			uint32_t dynamicOffset = j * static_cast<uint32_t>(nodeData.dynamicAlignment);
-			// Bind the descriptor set for rendering a mesh using the dynamic offset
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 2, 1, &nodeData.descriptorSet, 1, &dynamicOffset);
-
-			for (VulkanglTFModel::Primitive& primitive : node->mesh.primitives) {
-				if (primitive.indexCount <= 0) {
-					continue;
-				}
-
-				// Bind the descriptor for the current primitive's texture
-				auto &mat = materials[primitive.materialIndex];
-				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &mat.descriptorSet, 0, nullptr);
-
-				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
-			}
+		std::cout << "draw nodes" << std::endl;
+		// sort transparent mesh, init
+		std::vector<Node*> sortedNodes;
+		sortedNodes.reserve(nodes.size());
+		for(auto node: nodes){
+			sortedNodes.push_back(node);
 		}
-		for (auto& child : node->children) {
-			drawNode(commandBuffer, pipelineLayout, child);
+		for(int i=0;i<sortedNodes.size();i++){
+			auto children = sortedNodes[i]->children;
+			sortedNodes.insert(sortedNodes.end(), children.begin(), children.end());
+		}
+		// sort
+		for(auto node: sortedNodes){
+			std::sort(node->mesh.primitives.begin(), node->mesh.primitives.end(),
+			[&](const VulkanglTFModel::Primitive& a, const VulkanglTFModel::Primitive& b){
+				auto &matA = materials[a.materialIndex];
+				auto &matB = materials[b.materialIndex];
+				if(matA.values.emissiveFactor.x > matB.values.emissiveFactor.x) {
+					return true;
+				} else if (matA.values.emissiveFactor.x < matB.values.emissiveFactor.x){
+					return false;
+				}
+				return a.firstIndex < b.firstIndex;
+			});
+		}
+		std::sort(sortedNodes.begin(), sortedNodes.end(), [&](const Node* a, const Node* b){
+			if(a->mesh.primitives.size() > 0 && b->mesh.primitives.size() > 0){
+				auto &matA = materials[a->mesh.primitives[0].materialIndex];
+				auto &matB = materials[b->mesh.primitives[0].materialIndex];
+				if(matA.values.emissiveFactor.x > matB.values.emissiveFactor.x){
+					return true;
+				} else if(matA.values.emissiveFactor.x < matB.values.emissiveFactor.x){
+					return false;
+				}
+			}
+			return a->index < b->index;
+		});
+
+		// draw
+		for(auto node: sortedNodes){
+			if (node->mesh.primitives.size() > 0) {
+				uint32_t j = node->index;
+				// One dynamic offset per dynamic descriptor to offset into the ubo containing all model matrices
+				uint32_t dynamicOffset = j * static_cast<uint32_t>(nodeData.dynamicAlignment);
+				// Bind the descriptor set for rendering a mesh using the dynamic offset
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 2, 1, &nodeData.descriptorSet, 1, &dynamicOffset);
+
+				for (VulkanglTFModel::Primitive& primitive : node->mesh.primitives) {
+					if (primitive.indexCount <= 0) {
+						continue;
+					}
+
+					// Bind the descriptor for the current primitive's texture
+					auto &mat = materials[primitive.materialIndex];
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &mat.descriptorSet, 0, nullptr);
+					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+				}
+			}
 		}
 	}
 
@@ -514,10 +552,8 @@ public:
 		VkDeviceSize offsets[1] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-		// Render all nodes at top-level
-		for (auto& node : nodes) {
-			drawNode(commandBuffer, pipelineLayout, node);
-		}
+		// Render all nodes
+		drawNodes(commandBuffer, pipelineLayout);
 	}
 
 };
@@ -774,17 +810,6 @@ public:
 		VkDescriptorSetLayout materials;
 	} descriptorSetLayouts;
 
-	struct FrameBufferAttachment {
-		VkImage image;
-		VkDeviceMemory mem;
-		VkImageView view;
-	};
-	struct FrameBuffer {
-		VkFramebuffer framebuffer;
-		FrameBufferAttachment color, depth;
-		VkDescriptorImageInfo descriptor;
-	};
-
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
 		title = "homework1";
@@ -819,6 +844,7 @@ public:
 
 	void buildCommandBuffers()
 	{
+		std::cout << "build command buffers" << std::endl;
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
 		VkClearValue clearValues[2];
@@ -1690,10 +1716,19 @@ public:
 
 	void preparePipelines()
 	{
+		VkPipelineColorBlendAttachmentState blendAttachmentStateCI = vks::initializers::pipelineColorBlendAttachmentState(
+			VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE);
+		blendAttachmentStateCI.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		blendAttachmentStateCI.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		blendAttachmentStateCI.colorBlendOp = VK_BLEND_OP_ADD;
+		blendAttachmentStateCI.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		blendAttachmentStateCI.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		blendAttachmentStateCI.alphaBlendOp = VK_BLEND_OP_ADD;
+
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
 		VkPipelineRasterizationStateCreateInfo rasterizationStateCI = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-		VkPipelineColorBlendAttachmentState blendAttachmentStateCI = vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE);
 		VkPipelineColorBlendStateCreateInfo colorBlendStateCI = vks::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentStateCI);
+
 		VkPipelineDepthStencilStateCreateInfo depthStencilStateCI = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
 		VkPipelineViewportStateCreateInfo viewportStateCI = vks::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
 		VkPipelineMultisampleStateCreateInfo multisampleStateCI = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);

@@ -6,8 +6,8 @@ The repository contains everything required to compile and build the examples on
 Use the provided CMakeLists.txt with [CMake](https://cmake.org) to generate a build configuration for your favorite IDE or compiler, e.g.:
 
 ```powershell
-# cmake -G "Visual Studio 17 2022" -A x64
-cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -SD:/Projects/games106 -Bd:/Projects/games106/build -G "Visual Studio 17 2022" -T host=x64 -A x64
+# cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -SD:/Projects/games106 -Bd:/Projects/games106/build -G "Visual Studio 17 2022" -T host=x64 -A x64
+cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -SD:/Projects/games106 -Bd:/Projects/games106/build -G "Ninja"
 ```
 
 ## <img src="./images/linuxlogo.png" alt="" height="32px"> Linux

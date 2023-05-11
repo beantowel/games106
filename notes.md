@@ -10,6 +10,8 @@ git stash apply
 tree homework /f
 git diff --no-index examples/gltfloading/gltfloading.cpp homework/homework1/homework1.cpp
 git diff --no-index examples/gltfskinning/gltfskinning.cpp homework/homework1/homework1.cpp
+
+cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -SD:/Projects/games106 -Bd:/Projects/games106/build -G "Visual Studio 17 2022" -T host=x64 -A x64
 ```
 
 ## homework
